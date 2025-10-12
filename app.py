@@ -219,7 +219,7 @@ Follow these rules strictly:
                         else:
                             original_name = "document"
                         
-                        output_filename = f"OCR_Gemma_{original_name}.md"
+                        output_filename = f"{original_name}.md"
                         
                         st.download_button(
                             label="⬇️ Download Markdown",
@@ -431,7 +431,7 @@ with tab2:
             zip_buffer = io.BytesIO()
             
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                md_filename = f"OCR_{original_filename}.md"
+                md_filename = f"{original_filename}.md"
                 zip_file.writestr(md_filename, markdown_content)
                 
                 for img_id, img_base64 in images_dict.items():
@@ -587,7 +587,7 @@ with tab2:
                         
                         if has_images:
                             zip_data = create_zip_with_attachments(markdown_result, images_dict, original_name)
-                            output_filename = f"OCR_{original_name}.zip"
+                            output_filename = f"{original_name}.zip"
                             
                             st.download_button(
                                 label="⬇️ Download ZIP (Markdown + Images)",
@@ -598,7 +598,7 @@ with tab2:
                                 key="download_zip"
                             )
                         else:
-                            output_filename = f"OCR_{original_name}.md"
+                            output_filename = f"{original_name}.md"
                             
                             st.download_button(
                                 label="⬇️ Download Markdown",
