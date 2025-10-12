@@ -291,65 +291,113 @@ with tab2:
             return width > height
         
         def create_nin1_pdf(pdf_bytes, n_in_1=2, dpi=300):
-            """PDF를 N-in-1 형식으로 변환"""
-            images = convert_from_bytes(pdf_bytes, dpi=dpi)
-            
-            if not images:
+            """메모리 최적화된 PDF N-in-1 변환"""
+            try:
+                # 먼저 총 페이지 수 확인
+                pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
+                total_pages = len(pdf_reader.pages)
+                
+                if total_pages == 0:
+                    return None
+                
+                # 첫 페이지만 로드하여 방향 확인 (메모리 절약)
+                first_page_img = convert_from_bytes(
+                    pdf_bytes, 
+                    dpi=dpi, 
+                    first_page=1, 
+                    last_page=1
+                )[0]
+                landscape = is_landscape(first_page_img)
+                base_width, base_height = first_page_img.size
+                
+                combined_images = []
+                
+                # 페이지를 그룹 단위로 처리 (메모리 절약)
+                for i in range(0, total_pages, n_in_1):
+                    # 현재 그룹의 페이지만 로드
+                    group_start = i + 1
+                    group_end = min(i + n_in_1, total_pages)
+                    
+                    # 필요한 페이지만 메모리에 로드
+                    group_images = convert_from_bytes(
+                        pdf_bytes, 
+                        dpi=dpi, 
+                        first_page=group_start, 
+                        last_page=group_end
+                    )
+                    
+                    if n_in_1 == 2:
+                        img1 = group_images[0]
+                        img2 = group_images[1] if len(group_images) > 1 else None
+                        
+                        if landscape:
+                            if img2:
+                                width = max(img1.width, img2.width)
+                                height = img1.height + img2.height
+                                combined = Image.new('RGB', (width, height), 'white')
+                                combined.paste(img1, (0, 0))
+                                combined.paste(img2, (0, img1.height))
+                            else:
+                                combined = img1
+                        else:
+                            if img2:
+                                width = img1.width + img2.width
+                                height = max(img1.height, img2.height)
+                                combined = Image.new('RGB', (width, height), 'white')
+                                combined.paste(img1, (0, 0))
+                                combined.paste(img2, (img1.width, 0))
+                            else:
+                                combined = img1
+                        
+                        combined_images.append(combined)
+                        
+                        # 메모리 즉시 해제
+                        del group_images, img1, img2
+                        
+                    elif n_in_1 == 4:
+                        # 4개의 이미지를 2x2 그리드로 배치
+                        imgs = group_images + [None] * (4 - len(group_images))
+                        
+                        combined_width = base_width * 2
+                        combined_height = base_height * 2
+                        combined = Image.new('RGB', (combined_width, combined_height), 'white')
+                        
+                        positions = [(0, 0), (base_width, 0), (0, base_height), (base_width, base_height)]
+                        for img, pos in zip(imgs, positions):
+                            if img:
+                                # 크기가 다를 경우 리사이즈
+                                if img.size != (base_width, base_height):
+                                    img = img.resize((base_width, base_height), Image.Resampling.LANCZOS)
+                                combined.paste(img, pos)
+                        
+                        combined_images.append(combined)
+                        
+                        # 메모리 즉시 해제
+                        del group_images, imgs
+                
+                # PDF로 저장
+                output = io.BytesIO()
+                if combined_images:
+                    combined_images[0].save(
+                        output, 
+                        format='PDF', 
+                        save_all=True, 
+                        append_images=combined_images[1:],
+                        optimize=True  # 파일 크기 최적화
+                    )
+                
+                output.seek(0)
+                result = output.getvalue()
+                
+                # 메모리 정리
+                del combined_images
+                output.close()
+                
+                return result
+                
+            except Exception as e:
+                st.error(f"N-in-1 변환 중 오류: {str(e)}")
                 return None
-            
-            landscape = is_landscape(images[0])
-            combined_images = []
-            
-            if n_in_1 == 2:
-                for i in range(0, len(images), 2):
-                    img1 = images[i]
-                    img2 = images[i + 1] if i + 1 < len(images) else None
-                    
-                    if landscape:
-                        if img2:
-                            width = max(img1.width, img2.width)
-                            height = img1.height + img2.height
-                            combined = Image.new('RGB', (width, height), 'white')
-                            combined.paste(img1, (0, 0))
-                            combined.paste(img2, (0, img1.height))
-                        else:
-                            combined = img1
-                    else:
-                        if img2:
-                            width = img1.width + img2.width
-                            height = max(img1.height, img2.height)
-                            combined = Image.new('RGB', (width, height), 'white')
-                            combined.paste(img1, (0, 0))
-                            combined.paste(img2, (img1.width, 0))
-                        else:
-                            combined = img1
-                    
-                    combined_images.append(combined)
-            
-            elif n_in_1 == 4:
-                for i in range(0, len(images), 4):
-                    imgs = [images[i + j] if i + j < len(images) else None for j in range(4)]
-                    
-                    base_width = imgs[0].width
-                    base_height = imgs[0].height
-                    
-                    combined_width = base_width * 2
-                    combined_height = base_height * 2
-                    combined = Image.new('RGB', (combined_width, combined_height), 'white')
-                    
-                    positions = [(0, 0), (base_width, 0), (0, base_height), (base_width, base_height)]
-                    for img, pos in zip(imgs, positions):
-                        if img:
-                            combined.paste(img, pos)
-                    
-                    combined_images.append(combined)
-            
-            output = io.BytesIO()
-            if combined_images:
-                combined_images[0].save(output, format='PDF', save_all=True, 
-                                       append_images=combined_images[1:])
-            output.seek(0)
-            return output.getvalue()
         
         def call_mistral_ocr(pdf_bytes):
             """Mistral OCR API 호출"""
