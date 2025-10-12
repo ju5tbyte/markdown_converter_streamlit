@@ -451,22 +451,20 @@ with tab2:
             
             prompt_gemma = st.text_area(
                 "변환 프롬프트를 입력하세요 (기본값 사용 가능):",
-                value="""
-You are a specialized AI assistant with expertise in parsing academic materials for Mathematics and Computer Science. Your mission is to accurately convert the provided image into a structured Markdown document.
+                value="""You are a specialized AI assistant with expertise in parsing academic materials for Mathematics and Computer Science. Your mission is to accurately convert the provided image into a structured Markdown document.
 
 Follow these rules strictly:
 
 1. Extract all text content accurately.
 2. Convert ALL mathematical equations and formulas to LaTeX format using $ for inline math and $ for display math.
-3. For complex mathematical expressions, use LaTeX notation strictly.
+3. For complex mathematical expressions, use LaTeX notation strictly. Also, for inline LaTeX math, there shouldn't be a space between the dollar signs and the formula. (e.g. $ a = b $ is not allowed, it should be $a = b$.)
 4. Preserve the document structure (headings, lists, tables, etc.). Use `**bold**` for bolded text and `*italic*` for italicized text.
 5. Use proper markdown syntax.
 6. All code snippets, pseudocode, or terminal commands must be enclosed in triple backticks (```). If you can identify the programming language, specify it (e.g., ```python, ```c++, ```java). Short inline codes must be enclosed in one backticks (`).
 7. Bulleted lists must start with a hyphen (`- `). Numbered lists should use numbers (`1. `, `2. `).
 8. If the slide contains diagrams, charts, or complex images that cannot be represented as text, describe them briefly in brackets. For example: [Image: Graph showing the process of gradient descent]
 9. Get rid of headers or footers such as lecture name, professor, laboratory name.
-10. Do not add any explanations, just output the markdown content. (text itself, not the code snippet of markdown)
-""",
+10. Do not add any explanations, just output the markdown content. (text itself, not the code snippet of markdown)""",
                 height=250,
                 key="pdf_prompt_gemma"
             )
