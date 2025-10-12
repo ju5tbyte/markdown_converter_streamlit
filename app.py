@@ -22,15 +22,15 @@ if google_api_key:
     genai.configure(api_key=google_api_key)
 
 # 메인 타이틀
-st.title("🔍 OCR Converter Suite")
+st.title("📝 OCR Converter Suite")
 st.markdown("PDF 또는 이미지를 마크다운으로 변환합니다.")
 st.markdown("---")
 
 # 탭 생성
-tab1, tab2 = st.tabs(["📄 PDF to Markdown", "📸 Image to Markdown"])
+tab1, tab2, tab3 = st.tabs(["📄 PDF to Markdown (Mistral)", "📄 PDF to Markdown (Gemma)", "📸 Image to Markdown"])
 
 # ============================================================================
-# TAB 1: PDF to Markdown
+# TAB 1: PDF to Markdown (Mistral)
 # ============================================================================
 with tab1:
     if not mistral_api_key:
@@ -361,9 +361,219 @@ with tab1:
                 st.warning("⚠️ Please upload a PDF file first.")
 
 # ============================================================================
-# TAB 2: Image to Markdown
+# TAB 2: PDF to Markdown (Gemma)
 # ============================================================================
 with tab2:
+    if not google_api_key:
+        st.error("❌ GOOGLE_API_KEY 환경 변수가 설정되어 있지 않습니다.")
+    else:
+        # 세션 스테이트 초기화
+        if 'gemma_preview_page_idx' not in st.session_state:
+            st.session_state.gemma_preview_page_idx = 0
+        if 'gemma_pdf_bytes_cache' not in st.session_state:
+            st.session_state.gemma_pdf_bytes_cache = None
+        
+        def parse_page_selection_gemma(page_input, total_pages):
+            """페이지 선택 문자열을 파싱하여 페이지 번호 리스트 반환"""
+            pages = set()
+            if not page_input.strip():
+                return list(range(total_pages))
+            
+            try:
+                parts = page_input.split(',')
+                for part in parts:
+                    part = part.strip()
+                    if '-' in part:
+                        start, end = part.split('-')
+                        start = int(start.strip()) - 1
+                        end = int(end.strip()) - 1
+                        pages.update(range(start, end + 1))
+                    else:
+                        pages.add(int(part.strip()) - 1)
+                
+                return sorted([p for p in pages if 0 <= p < total_pages])
+            except:
+                return list(range(total_pages))
+        
+        def convert_pdf_to_markdown_gemma(pdf_bytes, page_indices, prompt, dpi=300):
+            """PDF를 Gemma API를 이용해 마크다운으로 변환"""
+            try:
+                # PDF를 이미지로 변환
+                images = convert_from_bytes(pdf_bytes, dpi=dpi)
+                
+                # 선택된 페이지만 필터링
+                selected_images = [images[i] for i in page_indices if i < len(images)]
+                
+                model = genai.GenerativeModel('gemma-3-27b-it')
+                markdown_results = []
+                
+                # 각 페이지를 개별적으로 처리
+                for idx, img in enumerate(selected_images):
+                    with st.spinner(f"📄 페이지 {idx + 1}/{len(selected_images)} 변환 중..."):
+                        response = model.generate_content([prompt, img])
+                        markdown_results.append(response.text)
+                
+                # 모든 페이지 결과를 합침
+                combined_markdown = "\n\n".join(markdown_results)
+                return combined_markdown
+                
+            except Exception as e:
+                st.error(f"❌ 변환 중 오류 발생: {str(e)}")
+                return None
+        
+        # 레이아웃
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.subheader("📤 Upload & Settings")
+            
+            uploaded_file_gemma = st.file_uploader("Upload PDF", type=['pdf'], key="pdf_uploader_gemma")
+            
+            if uploaded_file_gemma is not None:
+                pdf_bytes_gemma = uploaded_file_gemma.read()
+                st.session_state.gemma_pdf_bytes_cache = pdf_bytes_gemma
+                uploaded_file_gemma.seek(0)
+            
+            dpi_gemma = st.selectbox(
+                "DPI (Resolution)",
+                options=[200, 300, 400],
+                index=1,
+                help="이미지 해상도 (높을수록 OCR 정확도 향상, 처리 시간 증가)",
+                key="dpi_select_gemma"
+            )
+            
+            page_selection_gemma = st.text_input(
+                "Page Selection", 
+                placeholder="예: 1, 3-5, 8 (비워두면 전체)",
+                help="추출할 페이지를 입력하세요. 예: 1, 3-5, 8",
+                key="page_selection_input_gemma"
+            )
+            
+            prompt_gemma = st.text_area(
+                "변환 프롬프트를 입력하세요 (기본값 사용 가능):",
+                value="""
+You are a specialized AI assistant with expertise in parsing academic materials for Mathematics and Computer Science. Your mission is to accurately convert the provided image into a structured Markdown document.
+
+Follow these rules strictly:
+
+1. Extract all text content accurately.
+2. Convert ALL mathematical equations and formulas to LaTeX format using $ for inline math and $ for display math.
+3. For complex mathematical expressions, use LaTeX notation strictly.
+4. Preserve the document structure (headings, lists, tables, etc.). Use `**bold**` for bolded text and `*italic*` for italicized text.
+5. Use proper markdown syntax.
+6. All code snippets, pseudocode, or terminal commands must be enclosed in triple backticks (```). If you can identify the programming language, specify it (e.g., ```python, ```c++, ```java). Short inline codes must be enclosed in one backticks (`).
+7. Bulleted lists must start with a hyphen (`- `). Numbered lists should use numbers (`1. `, `2. `).
+8. If the slide contains diagrams, charts, or complex images that cannot be represented as text, describe them briefly in brackets. For example: [Image: Graph showing the process of gradient descent]
+9. Get rid of headers or footers such as lecture name, professor, laboratory name.
+10. Do not add any explanations, just output the markdown content. (text itself, not the code snippet of markdown)
+""",
+                height=250,
+                key="pdf_prompt_gemma"
+            )
+            
+            convert_btn_gemma = st.button("🔄 Convert", type="primary", use_container_width=True, key="pdf_convert_btn_gemma")
+            
+            if st.session_state.gemma_pdf_bytes_cache is not None:
+                st.subheader("📖 PDF Preview")
+                try:
+                    pdf_bytes = st.session_state.gemma_pdf_bytes_cache
+                    pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
+                    total_pages = len(pdf_reader.pages)
+                    
+                    selected_pages = parse_page_selection_gemma(page_selection_gemma, total_pages)
+                    
+                    if len(selected_pages) == 0:
+                        st.warning("⚠️ 선택된 페이지가 없습니다.")
+                    else:
+                        if st.session_state.gemma_preview_page_idx >= len(selected_pages):
+                            st.session_state.gemma_preview_page_idx = 0
+                        
+                        col_nav1, col_nav2, col_nav3 = st.columns([1, 2, 1])
+                        
+                        with col_nav1:
+                            if st.button("⬅️ Previous", use_container_width=True, disabled=(st.session_state.gemma_preview_page_idx == 0), key="prev_btn_gemma"):
+                                st.session_state.gemma_preview_page_idx = max(0, st.session_state.gemma_preview_page_idx - 1)
+                                st.rerun()
+                        
+                        with col_nav2:
+                            st.markdown(f"<div style='text-align: center; padding: 8px;'><b>Page {st.session_state.gemma_preview_page_idx + 1} of {len(selected_pages)}</b><br/>(Original: Page {selected_pages[st.session_state.gemma_preview_page_idx] + 1})</div>", unsafe_allow_html=True)
+                        
+                        with col_nav3:
+                            if st.button("Next ➡️", use_container_width=True, disabled=(st.session_state.gemma_preview_page_idx >= len(selected_pages) - 1), key="next_btn_gemma"):
+                                st.session_state.gemma_preview_page_idx = min(len(selected_pages) - 1, st.session_state.gemma_preview_page_idx + 1)
+                                st.rerun()
+                        
+                        current_page_idx = selected_pages[st.session_state.gemma_preview_page_idx]
+                        images = convert_from_bytes(
+                            pdf_bytes, 
+                            dpi=150, 
+                            first_page=current_page_idx + 1, 
+                            last_page=current_page_idx + 1
+                        )
+                        
+                        if images:
+                            st.image(images[0], use_container_width=True)
+                        
+                        st.info(f"📄 Total Pages: {total_pages} | Selected: {len(selected_pages)} pages")
+                    
+                except Exception as e:
+                    st.error(f"Error previewing PDF: {str(e)}")
+        
+        with col2:
+            st.subheader("📝 Markdown Output")
+            
+            if convert_btn_gemma and st.session_state.gemma_pdf_bytes_cache is not None:
+                try:
+                    pdf_bytes = st.session_state.gemma_pdf_bytes_cache
+                    pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
+                    total_pages = len(pdf_reader.pages)
+                    
+                    page_indices = parse_page_selection_gemma(page_selection_gemma, total_pages)
+                    st.info(f"Selected pages: {[p+1 for p in page_indices]}")
+                    
+                    markdown_result = convert_pdf_to_markdown_gemma(
+                        pdf_bytes, 
+                        page_indices, 
+                        prompt_gemma, 
+                        dpi=dpi_gemma
+                    )
+                    
+                    if markdown_result:
+                        st.success("✅ Conversion completed!")
+                        
+                        with st.expander("📄 Preview", expanded=True):
+                            st.markdown(markdown_result)
+                        
+                        with st.expander("📋 Raw Markdown"):
+                            st.code(markdown_result, language='markdown')
+                        
+                        if uploaded_file_gemma is not None:
+                            original_name = Path(uploaded_file_gemma.name).stem
+                        else:
+                            original_name = "document"
+                        
+                        output_filename = f"OCR_Gemma_{original_name}.md"
+                        
+                        st.download_button(
+                            label="⬇️ Download Markdown",
+                            data=markdown_result,
+                            file_name=output_filename,
+                            mime="text/markdown",
+                            use_container_width=True,
+                            key="download_md_gemma"
+                        )
+                        
+                except Exception as e:
+                    st.error(f"❌ Error: {str(e)}")
+                    st.exception(e)
+            
+            elif convert_btn_gemma and st.session_state.gemma_pdf_bytes_cache is None:
+                st.warning("⚠️ Please upload a PDF file first.")
+
+# ============================================================================
+# TAB 3: Image to Markdown
+# ============================================================================
+with tab3:
     if not google_api_key:
         st.error("❌ GOOGLE_API_KEY 환경 변수가 설정되어 있지 않습니다.")
     else:
@@ -418,13 +628,11 @@ with tab2:
                 "변환 프롬프트를 입력하세요 (기본값 사용 가능):",
                 value="""Convert this image to markdown format with the following requirements:
 1. Extract all text content accurately
-2. Convert ALL mathematical equations and formulas to LaTeX format using $ for inline math and $$ for display math
+2. Convert ALL mathematical equations and formulas to LaTeX format using $ for inline math and $ for display math
 3. Preserve the document structure (headings, lists, tables, etc.)
 4. Use proper markdown syntax
 5. For complex mathematical expressions, use LaTeX notation strictly
-6. Do not add any explanations, just output the markdown content
-
-Output only the markdown text without any additional comments.""",
+6. Do not add any explanations, just output only the markdown text (not code snippet, tex itself) without any additional comments.""",
                 height=200,
                 key="image_prompt"
             )
@@ -454,12 +662,21 @@ Output only the markdown text without any additional comments.""",
 with st.sidebar:
     st.markdown("## ℹ️ 사용 방법")
     
-    st.markdown("### 📄 PDF to Markdown")
+    st.markdown("### 📄 PDF to Markdown (Mistral)")
     st.markdown("""
     1. PDF 파일 업로드
     2. 페이지 선택 및 설정 조정
     3. 변환 버튼 클릭
     4. 결과 다운로드
+    """)
+    
+    st.markdown("### 📄 PDF to Markdown (Gemma)")
+    st.markdown("""
+    1. PDF 파일 업로드
+    2. 페이지 선택 및 DPI 설정
+    3. 프롬프트 조정 (선택사항)
+    4. 변환 버튼 클릭
+    5. 결과 다운로드
     """)
     
     st.markdown("### 📸 Image to Markdown")
@@ -470,5 +687,7 @@ with st.sidebar:
     """)
     
     st.markdown("---")
-    st.markdown("**PDF OCR Model:** Mistral OCR")
+    st.markdown("**PDF OCR Models:**")
+    st.markdown("- Mistral OCR (Tab 1)")
+    st.markdown("- Gemma 3 27B IT (Tab 2)")
     st.markdown("**Image OCR Model:** Gemma 3 27B IT")
