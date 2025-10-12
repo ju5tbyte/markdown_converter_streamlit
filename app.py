@@ -127,10 +127,6 @@ Follow these rules strictly:
 1. Extract all text content accurately.
 2. Convert ALL mathematical equations and formulas to LaTeX format using $ for inline math and $ for display math.
 3. For complex mathematical expressions, use LaTeX notation strictly. 
-3-1. All inline mathematical formulas must be enclosed in dollar signs ($). Ensure there are no spaces immediately following the opening $ or preceding the closing $. The formula must start immediately after the opening $ and end immediately before the closing $. 
-Example:
-- Correct: $E=mc^2$
-- Incorrect: $ E=mc^2 $
 4. Preserve the document structure (headings, lists, tables, etc.). Use `**bold**` for bolded text and `*italic*` for italicized text.
 5. Use proper markdown syntax.
 6. All code snippets, pseudocode, or terminal commands must be enclosed in triple backticks (```). If you can identify the programming language, specify it (e.g., ```python, ```c++, ```java). Short inline codes must be enclosed in one backticks (`).
