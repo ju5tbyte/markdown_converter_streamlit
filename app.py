@@ -26,8 +26,7 @@ if google_api_key:
     genai.configure(api_key=google_api_key)
 
 # 메인 타이틀
-st.title("📝 OCR Converter Suite")
-st.markdown("PDF 또는 이미지를 마크다운으로 변환합니다.")
+st.title("📝 Useful Functions for Obsidian Suite")
 st.markdown("---")
 
 # 탭 생성
@@ -709,21 +708,38 @@ with tab3:
                 st.info("👈 왼쪽에서 이미지를 선택하고 변환 버튼을 클릭하세요.")
 
 # 탭 4: Markdown to PDF with Pandoc
-with tab4:
+with tab1:
     st.header("Markdown을 PDF로 변환")
     st.markdown("Markdown 파일을 업로드하여 Pandoc으로 변환합니다.")
     
     md_file = st.file_uploader("Markdown 파일 선택", type=['md', 'markdown'], key="md")
     
+    # 이미지 파일 업로드 (여러 개 가능)
+    image_files = st.file_uploader(
+        "이미지 파일 선택 (여러 개 가능)", 
+        type=['png', 'jpg', 'jpeg', 'gif', 'svg', 'pdf'],
+        accept_multiple_files=True,
+        key="images",
+        help="마크다운에서 참조하는 이미지를 업로드하세요"
+    )
+    
+    # 업로드된 이미지 목록 표시
+    if image_files:
+        with st.expander(f"📷 업로드된 이미지 ({len(image_files)}개)", expanded=False):
+            for img in image_files:
+                st.text(f"✓ {img.name}")
+    
     # Beamer 옵션
     use_beamer = st.checkbox("🎬 Beamer 프레젠테이션으로 변환", value=False)
     
     # 필터 파일 확인
+    st.expander("📋 필터 및 스크립트 파일 확인").write("")
     with st.expander("📋 필터 및 스크립트 파일 확인", expanded=False):
         required_files = [
             "image-resize.lua",
             "wikilink-to-cite.lua", 
             "remove-hr-for-doc.lua",
+            "mermaid-filter.cmd"
         ]
         
         all_exist = True
@@ -744,20 +760,35 @@ with tab4:
                 try:
                     # 임시 디렉토리 생성
                     with tempfile.TemporaryDirectory() as tmpdir:
-                        # 파일 저장
+                        # 이미지를 저장할 서브디렉토리 생성
+                        image_dir = os.path.join(tmpdir, "images")
+                        os.makedirs(image_dir, exist_ok=True)
+                        
+                        # 마크다운 파일 저장
                         md_path = os.path.join(tmpdir, md_file.name)
                         output_path = os.path.join(tmpdir, "output.pdf")
                         
                         with open(md_path, "wb") as f:
                             f.write(md_file.getbuffer())
                         
+                        # 이미지 파일들 저장
+                        if image_files:
+                            for img_file in image_files:
+                                img_path = os.path.join(image_dir, img_file.name)
+                                with open(img_path, "wb") as f:
+                                    f.write(img_file.getbuffer())
+                            
+                            st.info(f"📁 {len(image_files)}개의 이미지 파일이 임시 폴더에 저장되었습니다.")
+                        
                         # Pandoc 명령어 구성
                         cmd = [
                             "pandoc",
                             md_path,
                             "-o", output_path,
+                            "-f", "markdown+wikilinks_title_after_pipe",
                             "--standalone",
-                            "--pdf-engine=pdflatex"
+                            "--pdf-engine=pdflatex",
+                            f"--resource-path={tmpdir}:{image_dir}"  # 리소스 경로 추가
                         ]
                         
                         # Beamer 옵션 추가
@@ -783,6 +814,10 @@ with tab4:
                         # citeproc 추가
                         cmd.append("--citeproc")
                         
+                        # mermaid-filter.cmd 추가 (존재하는 경우)
+                        if os.path.exists("mermaid-filter.cmd"):
+                            cmd.extend(["--filter", os.path.abspath("mermaid-filter.cmd")])
+                        
                         # 명령어 표시 (디버깅용)
                         with st.expander("🔍 실행 명령어 보기"):
                             st.code(" ".join(cmd), language="bash")
@@ -799,14 +834,19 @@ with tab4:
                                 pdf_data = f.read()
                             
                             st.success("✅ 변환 완료!")
+                            
+                            # 출력 파일명 결정
+                            output_filename = "presentation.pdf" if use_beamer else "converted.pdf"
+                            
                             st.download_button(
                                 label="📥 PDF 다운로드",
                                 data=pdf_data,
-                                file_name="converted.pdf",
+                                file_name=output_filename,
                                 mime="application/pdf"
                             )
                         else:
-                            st.error(f"❌ 변환 실패:\n{result.stderr}")
+                            st.error(f"❌ 변환 실패:")
+                            st.code(result.stderr, language="text")
                 
                 except FileNotFoundError:
                     st.error("❌ Pandoc이 설치되어 있지 않습니다. 먼저 Pandoc을 설치해주세요.")
@@ -943,6 +983,33 @@ with st.sidebar:
     1. 이미지 업로드 또는 붙여넣기
     2. 변환 버튼 클릭
     3. 결과 확인 및 복사
+    """)
+    
+    st.markdown("### Markdown → PDF")
+    st.markdown("""
+    - Markdown 파일을 업로드하여 PDF로 변환
+    - **기본 옵션**:
+      - Format: `markdown+wikilinks_title_after_pipe`
+      - PDF Engine: `pdflatex`
+      - Standalone: `true`
+    - **필터 적용** (파일이 있는 경우):
+      - `image-resize.lua`
+      - `wikilink-to-cite.lua`
+      - `remove-hr-for-doc.lua`
+      - `citeproc`
+      - `mermaid-filter.cmd`
+    - **Beamer 옵션**:
+      - 체크 시 프레젠테이션 형식으로 변환
+      - Theme: Montpellier
+      - Color: default
+      - Font: serif
+    """)
+    
+    st.markdown("### PNG → PDF")
+    st.markdown("""
+    - 세로로 긴 PNG 이미지 업로드
+    - 원하는 페이지 수 입력
+    - 자동으로 균등 분할하여 PDF 생성
     """)
     
     st.markdown("---")
