@@ -16,6 +16,45 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter, A4
 import tempfile
 
+REQUIRED_PACKAGES = ['kotex', 'geometry', 'amsmath', 'mathtools', 'graphicx', 'xcolor', 'hyperref', 'fontspec', 'booktabs', 'fancyhdr', 'caption', 'subcaption', 'enumitem', 'siunitx', 'cleveref', 'microtype', 'tikz', 'pgfplots', 'listings', 'minted', 'biblatex', 'natbib', 'tcolorbox', 'longtable', 'multirow', 'tabularray', 'todonotes', 'babel', 'polyglossia']
+
+def install_tex_package(package_name):
+    """TeX Live 패키지 설치"""
+    try:
+        result = subprocess.run(
+            ['tlmgr', 'install', package_name],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        return result.returncode == 0
+    except Exception as e:
+        st.warning(f"패키지 {package_name} 설치 중 오류: {str(e)}")
+        return False
+
+def check_and_install_packages():
+    """필요한 패키지 확인 및 설치"""
+    with st.spinner("필요한 TeX Live 패키지를 확인하는 중..."):
+        for package in REQUIRED_PACKAGES:
+            # 패키지 설치 여부 확인
+            check_result = subprocess.run(
+                ['tlmgr', 'info', '--only-installed', package],
+                capture_output=True,
+                text=True
+            )
+            
+            if check_result.returncode != 0:
+                st.info(f"📦 패키지 '{package}' 설치 중...")
+                if install_tex_package(package):
+                    st.success(f"✅ 패키지 '{package}' 설치 완료!")
+                else:
+                    st.warning(f"⚠️ 패키지 '{package}' 설치 실패 (계속 진행)")
+
+# 앱 시작 시 패키지 확인
+if 'packages_checked' not in st.session_state:
+    check_and_install_packages()
+    st.session_state.packages_checked = True
+
 st.set_page_config(page_title="OCR Converter Suite", layout="wide")
 
 # API 키 확인
