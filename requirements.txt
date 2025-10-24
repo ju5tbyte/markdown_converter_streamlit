@@ -5,3 +5,4 @@ Pillow
 mistralai
 google-generativeai
 streamlit-paste-button
+reportlab

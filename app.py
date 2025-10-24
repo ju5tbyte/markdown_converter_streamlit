@@ -11,6 +11,10 @@ from pathlib import Path
 from mistralai import Mistral
 import google.generativeai as genai
 from streamlit_paste_button import paste_image_button
+import subprocess
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter, A4
+import tempfile
 
 st.set_page_config(page_title="OCR Converter Suite", layout="wide")
 
@@ -27,7 +31,7 @@ st.markdown("PDF 또는 이미지를 마크다운으로 변환합니다.")
 st.markdown("---")
 
 # 탭 생성
-tab1, tab2, tab3 = st.tabs(["📄 PDF to Markdown (Gemma)", "📄 PDF to Markdown (Mistral)", "📸 Image to Markdown"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📄 PDF to Markdown (Gemma)", "📄 PDF to Markdown (Mistral)", "📸 Image to Markdown", "📝 Markdown → PDF (Pandoc)", "🖼️ PNG → PDF (페이지 분할)"])
 
 # ============================================================================
 # TAB 1: PDF to Markdown (Gemma)
@@ -131,7 +135,7 @@ Follow these rules strictly:
 5. Use proper markdown syntax.
 6. All code snippets, pseudocode, or terminal commands must be enclosed in triple backticks (```). If you can identify the programming language, specify it (e.g., ```python, ```c++, ```java). Short inline codes must be enclosed in one backticks (`).
 7. Bulleted lists must start with a hyphen (`- `). Numbered lists should use numbers (`1. `, `2. `).
-8. If the slide contains diagrams, charts, or complex images that cannot be represented as text, describe them briefly in brackets. For example: [Image: Graph showing the process of gradient descent]
+8. If the slide contains diagrams, charts, or complex images, ignore it.
 9. Get rid of headers or footers such as lecture name, professor, laboratory name.
 10. Do not add any explanations, just output the markdown content. (text itself, not the code snippet of markdown)""",
                 height=250,
@@ -703,6 +707,175 @@ with tab3:
                 st.code(st.session_state.markdown_result, language="markdown")
             else:
                 st.info("👈 왼쪽에서 이미지를 선택하고 변환 버튼을 클릭하세요.")
+
+# 탭 4: Markdown to PDF with Pandoc
+with tab4:
+    st.header("Markdown을 PDF로 변환")
+    st.markdown("Markdown 파일과 config.yaml 파일을 업로드하여 Pandoc으로 변환합니다.")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        md_file = st.file_uploader("Markdown 파일 선택", type=['md', 'markdown'], key="md")
+    
+    with col2:
+        yaml_file = st.file_uploader("config.yaml 파일 선택", type=['yaml', 'yml'], key="yaml")
+    
+    if md_file and yaml_file:
+        if st.button("🔄 Pandoc으로 변환", key="convert_md"):
+            with st.spinner("변환 중..."):
+                try:
+                    # 임시 디렉토리 생성
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        # 파일 저장
+                        md_path = os.path.join(tmpdir, md_file.name)
+                        yaml_path = os.path.join(tmpdir, "config.yaml")
+                        output_path = os.path.join(tmpdir, "output.pdf")
+                        
+                        with open(md_path, "wb") as f:
+                            f.write(md_file.getbuffer())
+                        
+                        with open(yaml_path, "wb") as f:
+                            f.write(yaml_file.getbuffer())
+                        
+                        # Pandoc 실행
+                        cmd = [
+                            "pandoc",
+                            md_path,
+                            "-o", output_path,
+                            "--defaults", yaml_path
+                        ]
+                        
+                        result = subprocess.run(
+                            cmd,
+                            capture_output=True,
+                            text=True,
+                            cwd=tmpdir
+                        )
+                        
+                        if result.returncode == 0:
+                            # PDF 파일 읽기
+                            with open(output_path, "rb") as f:
+                                pdf_data = f.read()
+                            
+                            st.success("✅ 변환 완료!")
+                            st.download_button(
+                                label="📥 PDF 다운로드",
+                                data=pdf_data,
+                                file_name="converted.pdf",
+                                mime="application/pdf"
+                            )
+                        else:
+                            st.error(f"❌ 변환 실패:\n{result.stderr}")
+                
+                except FileNotFoundError:
+                    st.error("❌ Pandoc이 설치되어 있지 않습니다. 먼저 Pandoc을 설치해주세요.")
+                except Exception as e:
+                    st.error(f"❌ 오류 발생: {str(e)}")
+
+with tab5:
+    st.header("PNG 이미지를 페이지별로 분할하여 PDF 생성")
+    st.markdown("세로로 긴 PNG 이미지를 지정한 페이지 수로 균등 분할합니다.")
+    
+    png_file = st.file_uploader("PNG 파일 선택", type=['png'], key="png")
+    
+    if png_file:
+        # 이미지 미리보기
+        img = Image.open(png_file)
+        width, height = img.size
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.image(img, caption=f"원본 이미지 ({width}x{height}px)", use_container_width=True)
+        
+        with col2:
+            st.info(f"""
+            **이미지 정보**
+            - 너비: {width}px
+            - 높이: {height}px
+            - 비율: {height/width:.2f}:1
+            """)
+            
+            num_pages = st.number_input(
+                "페이지 수",
+                min_value=1,
+                max_value=100,
+                value=5,
+                step=1,
+                help="이미지를 몇 페이지로 분할할지 선택하세요"
+            )
+            
+            page_height = height // num_pages
+            st.metric("페이지당 높이", f"{page_height}px")
+    
+    if png_file and st.button("📄 PDF 생성", key="create_pdf"):
+        with st.spinner("PDF 생성 중..."):
+            try:
+                # 이미지 다시 열기 (file pointer 리셋)
+                png_file.seek(0)
+                img = Image.open(png_file)
+                width, height = img.size
+                
+                # PDF 생성
+                pdf_buffer = io.BytesIO()
+                
+                # 페이지 크기 계산 (이미지 비율 유지)
+                page_height_px = height / num_pages
+                aspect_ratio = width / page_height_px
+                
+                # A4 세로 크기 기준으로 조정
+                pdf_width = 595  # A4 width in points
+                pdf_height = pdf_width / aspect_ratio
+                
+                c = canvas.Canvas(pdf_buffer, pagesize=(pdf_width, pdf_height))
+                
+                # 각 페이지 생성
+                progress_bar = st.progress(0)
+                for i in range(num_pages):
+                    # 이미지 영역 자르기
+                    top = int(i * page_height_px)
+                    bottom = int((i + 1) * page_height_px)
+                    
+                    # 마지막 페이지는 남은 부분 모두 포함
+                    if i == num_pages - 1:
+                        bottom = height
+                    
+                    cropped = img.crop((0, top, width, bottom))
+                    
+                    # 임시 파일로 저장
+                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                        cropped.save(tmp.name, 'PNG')
+                        tmp_path = tmp.name
+                    
+                    # PDF에 이미지 추가
+                    c.drawImage(tmp_path, 0, 0, width=pdf_width, height=pdf_height)
+                    
+                    if i < num_pages - 1:
+                        c.showPage()
+                    
+                    # 임시 파일 삭제
+                    os.unlink(tmp_path)
+                    
+                    # 진행률 업데이트
+                    progress_bar.progress((i + 1) / num_pages)
+                
+                c.save()
+                
+                # PDF 데이터 가져오기
+                pdf_data = pdf_buffer.getvalue()
+                
+                st.success(f"✅ {num_pages}페이지 PDF 생성 완료!")
+                st.download_button(
+                    label="📥 PDF 다운로드",
+                    data=pdf_data,
+                    file_name="split_pages.pdf",
+                    mime="application/pdf"
+                )
+                
+            except Exception as e:
+                st.error(f"❌ 오류 발생: {str(e)}")
+
 
 # 사이드바
 with st.sidebar:
