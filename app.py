@@ -719,7 +719,6 @@ with tab4:
     use_beamer = st.checkbox("🎬 Beamer 프레젠테이션으로 변환", value=False)
     
     # 필터 파일 확인
-    st.expander("📋 필터 및 스크립트 파일 확인").write("")
     with st.expander("📋 필터 및 스크립트 파일 확인", expanded=False):
         required_files = [
             "image-resize.lua",
@@ -757,7 +756,6 @@ with tab4:
                             "pandoc",
                             md_path,
                             "-o", output_path,
-                            "-f", "markdown+wikilinks_title_after_pipe",
                             "--standalone",
                             "--pdf-engine=pdflatex"
                         ]
