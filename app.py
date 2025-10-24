@@ -739,7 +739,6 @@ with tab4:
             "image-resize.lua",
             "wikilink-to-cite.lua", 
             "remove-hr-for-doc.lua",
-            "mermaid-filter.cmd"
         ]
         
         all_exist = True
@@ -813,10 +812,6 @@ with tab4:
                         
                         # citeproc 추가
                         cmd.append("--citeproc")
-                        
-                        # mermaid-filter.cmd 추가 (존재하는 경우)
-                        if os.path.exists("mermaid-filter.cmd"):
-                            cmd.extend(["--filter", os.path.abspath("mermaid-filter.cmd")])
                         
                         # 명령어 표시 (디버깅용)
                         with st.expander("🔍 실행 명령어 보기"):
