@@ -1,3 +1,10 @@
 poppler-utils
 pandoc
 texlive
+texlive-latex-recommended
+texlive-lang-korean
+texlive-latex-extra
+texlive-pictures
+texlive-bibtex-extra
+texlive-science
+biber
