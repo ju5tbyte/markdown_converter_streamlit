@@ -783,7 +783,6 @@ with tab4:
                             "pandoc",
                             md_path,
                             "-o", output_path,
-                            "-f", "markdown+wikilinks_title_after_pipe",
                             "--standalone",
                             "--pdf-engine=pdflatex",
                             f"--resource-path={tmpdir}:{image_dir}"  # 리소스 경로 추가
