@@ -711,17 +711,35 @@ with tab3:
 # 탭 4: Markdown to PDF with Pandoc
 with tab4:
     st.header("Markdown을 PDF로 변환")
-    st.markdown("Markdown 파일과 config.yaml 파일을 업로드하여 Pandoc으로 변환합니다.")
+    st.markdown("Markdown 파일을 업로드하여 Pandoc으로 변환합니다.")
     
-    col1, col2 = st.columns(2)
+    md_file = st.file_uploader("Markdown 파일 선택", type=['md', 'markdown'], key="md")
     
-    with col1:
-        md_file = st.file_uploader("Markdown 파일 선택", type=['md', 'markdown'], key="md")
+    # Beamer 옵션
+    use_beamer = st.checkbox("🎬 Beamer 프레젠테이션으로 변환", value=False)
     
-    with col2:
-        yaml_file = st.file_uploader("config.yaml 파일 선택", type=['yaml', 'yml'], key="yaml")
+    # 필터 파일 확인
+    st.expander("📋 필터 및 스크립트 파일 확인").write("")
+    with st.expander("📋 필터 및 스크립트 파일 확인", expanded=False):
+        required_files = [
+            "image-resize.lua",
+            "wikilink-to-cite.lua", 
+            "remove-hr-for-doc.lua",
+        ]
+        
+        all_exist = True
+        for file in required_files:
+            exists = os.path.exists(file)
+            if exists:
+                st.success(f"✅ {file}")
+            else:
+                st.warning(f"⚠️ {file} - 없음")
+                all_exist = False
+        
+        if not all_exist:
+            st.info("💡 일부 필터 파일이 없어도 변환은 진행되지만, 해당 기능은 적용되지 않습니다.")
     
-    if md_file and yaml_file:
+    if md_file:
         if st.button("🔄 Pandoc으로 변환", key="convert_md"):
             with st.spinner("변환 중..."):
                 try:
@@ -729,28 +747,52 @@ with tab4:
                     with tempfile.TemporaryDirectory() as tmpdir:
                         # 파일 저장
                         md_path = os.path.join(tmpdir, md_file.name)
-                        yaml_path = os.path.join(tmpdir, "config.yaml")
                         output_path = os.path.join(tmpdir, "output.pdf")
                         
                         with open(md_path, "wb") as f:
                             f.write(md_file.getbuffer())
                         
-                        with open(yaml_path, "wb") as f:
-                            f.write(yaml_file.getbuffer())
-                        
-                        # Pandoc 실행
+                        # Pandoc 명령어 구성
                         cmd = [
                             "pandoc",
                             md_path,
                             "-o", output_path,
-                            "--defaults", yaml_path
+                            "-f", "markdown+wikilinks_title_after_pipe",
+                            "--standalone",
+                            "--pdf-engine=pdflatex"
                         ]
+                        
+                        # Beamer 옵션 추가
+                        if use_beamer:
+                            cmd.extend([
+                                "-t", "beamer",
+                                "-V", "theme=Montpellier",
+                                "-V", "colortheme=default",
+                                "-V", "fonttheme=serif"
+                            ])
+                        
+                        # 필터 추가 (존재하는 것만)
+                        filters = [
+                            "image-resize.lua",
+                            "wikilink-to-cite.lua",
+                            "remove-hr-for-doc.lua"
+                        ]
+                        
+                        for filter_file in filters:
+                            if os.path.exists(filter_file):
+                                cmd.extend(["--lua-filter", os.path.abspath(filter_file)])
+                        
+                        # citeproc 추가
+                        cmd.append("--citeproc")
+                        
+                        # 명령어 표시 (디버깅용)
+                        with st.expander("🔍 실행 명령어 보기"):
+                            st.code(" ".join(cmd), language="bash")
                         
                         result = subprocess.run(
                             cmd,
                             capture_output=True,
-                            text=True,
-                            cwd=tmpdir
+                            text=True
                         )
                         
                         if result.returncode == 0:
