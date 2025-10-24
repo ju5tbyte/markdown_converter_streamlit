@@ -708,7 +708,7 @@ with tab3:
                 st.info("👈 왼쪽에서 이미지를 선택하고 변환 버튼을 클릭하세요.")
 
 # 탭 4: Markdown to PDF with Pandoc
-with tab1:
+with tab4:
     st.header("Markdown을 PDF로 변환")
     st.markdown("Markdown 파일을 업로드하여 Pandoc으로 변환합니다.")
     
@@ -988,21 +988,6 @@ with st.sidebar:
     st.markdown("### Markdown → PDF")
     st.markdown("""
     - Markdown 파일을 업로드하여 PDF로 변환
-    - **기본 옵션**:
-      - Format: `markdown+wikilinks_title_after_pipe`
-      - PDF Engine: `pdflatex`
-      - Standalone: `true`
-    - **필터 적용** (파일이 있는 경우):
-      - `image-resize.lua`
-      - `wikilink-to-cite.lua`
-      - `remove-hr-for-doc.lua`
-      - `citeproc`
-      - `mermaid-filter.cmd`
-    - **Beamer 옵션**:
-      - 체크 시 프레젠테이션 형식으로 변환
-      - Theme: Montpellier
-      - Color: default
-      - Font: serif
     """)
     
     st.markdown("### PNG → PDF")
